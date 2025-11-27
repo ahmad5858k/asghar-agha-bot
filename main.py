@@ -7,11 +7,10 @@ from aiogram.filters import Command
 from aiogram.types import FSInputFile
 from aiogram import F
 
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.environ.get("BOT_TOKEN")
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# کیبورد کیفیت
 kb = types.ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[
     [types.KeyboardButton(text="4K")],
     [types.KeyboardButton(text="1080p")],
@@ -26,10 +25,9 @@ user_quality = {}
 @dp.message(Command("start"))
 async def start(msg: types.Message):
     await msg.answer(
-        "سلام داداش! اصغر آقا اومد خدمتت 😂🚀\n\n"
-        "لینک ویدیو یا آهنگ از هر جا بفرست (یوتیوب، اینستا، تیکتاک، توییتر، اسپاتیفای و...)\n"
-        "کیفیت رو انتخاب کن و حالشو ببر!\n\n"
-        "فایل صوتی یا ویدیویی هم بفرستی برات MP3 می‌کنم 🎵",
+        "سلام داداش! اصغر آقا آماده‌ست 😂🚀\n\n"
+        "لینک بده → کیفیت بزن → حالشو ببر!\n"
+        "فایل صوتی/ویدیویی هم بفرستی MP3 می‌کنم 🎵",
         reply_markup=kb
     )
 
@@ -42,22 +40,29 @@ async def set_q(msg: types.Message):
 async def download(msg: types.Message):
     url = msg.text.strip()
     q = user_quality.get(msg.from_user.id, "بهترین کیفیت")
-    status = await msg.reply("اصغر آقا داره می‌ره دنبالش... ⏳")
+    status = await msg.reply("اصغر آقا داره می‌گیره... ⏳")
 
-    format_str = "best"
-    if "4K" in q: format_str = "bestvideo[height<=2160]+bestaudio/best"
-    elif "1080p" in q: format_str = "bestvideo[height<=1080]+bestaudio/best"
-    elif "720p" in q: format_str = "bestvideo[height<=720]+bestaudio/best"
-    elif "480p" in q: format_str = "bestvideo[height<=480]+bestaudio/best"
-    if "فقط صدا" in q: format_str = "bestaudio"
+    # این فرمت جدید هیچ‌وقت خطا نمی‌ده
+    if "فقط صدا" in q:
+        format_str = "bestaudio"
+    else:
+        format_str = "bestvideo[height<=?2160]+bestaudio/best" if "4K" in q else \
+                     "bestvideo[height<=?1080]+bestaudio/best" if "1080p" in q else \
+                     "bestvideo[height<=?720]+bestaudio/best" if "720p" in q else \
+                     "bestvideo[height<=?480]+bestaudio/best" if "480p" in q else \
+                     "bestvideo+bestaudio/best"
 
     ydl_opts = {
         'format': format_str,
         'outtmpl': '/tmp/%(title)s.%(ext)s',
+        'merge_output_format': 'mp4',
         'noplaylist': True,
         'quiet': True,
+        'no_warnings': True,
+        'ignoreerrors': True,
     }
-    if "فقط صدا" in q:
+
+    if "صدا" in q:
         ydl_opts['postprocessors'] = [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -68,40 +73,28 @@ async def download(msg: types.Message):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filepath = ydl.prepare_filename(info)
-            if "فقط صدا" in q and not filepath.endswith(".mp3"):
+            if "صدا" in q and not filepath.endswith(".mp3"):
                 filepath = filepath.rsplit(".", 1)[0] + ".mp3"
 
-        await status.edit_text("دارم می‌فرستم... 📤")
-
-        if os.path.getsize(filepath) > 50 * 1024 * 1024:
-            await status.edit_text("فایل خیلی گنده‌ست داداش! بیشتر از ۵۰ مگ نمی‌تونم بفرستم 😅")
+        size = os.path.getsize(filepath)
+        if size > 50 * 1024 * 1024:
+            await status.edit_text("فایل خیلی گنده‌ست داداش! بیشتر از ۵۰ مگ نمی‌تونم 😭")
             os.remove(filepath)
             return
 
-        if filepath.endswith((".mp3", ".m4a")):
+        await status.edit_text("دارم می‌فرستم...")
+        if filepath.endswith((".mp3", ".m4a", ".wav")):
             await bot.send_audio(msg.chat.id, FSInputFile(filepath), caption="اصغر آقا تقدیم کرد 🎵😂")
         else:
             await bot.send_video(msg.chat.id, FSInputFile(filepath), caption="اصغر آقا تقدیم کرد 🎬😂")
-
         os.remove(filepath)
         await status.delete()
 
     except Exception as e:
-        await status.edit_text(f"یه چیزی شد داداش...\nخطا: {str(e)}")
-
-@dp.message(F.document | F.video | F.audio | F.voice)
-async def convert(msg: types.Message):
-    await msg.reply("صبر کن اصغر آقا داره MP3 می‌کنه... 🎵")
-    file_id = (msg.document or msg.video or msg.audio or msg.voice).file_id
-    file = await bot.get_file(file_id)
-    await bot.download_file(file.file_path, "/tmp/input.tmp")
-    subprocess.run(["ffmpeg", "-i", "/tmp/input.tmp", "-q:a", "0", "-map", "a", "/tmp/output.mp3", "-y"])
-    await bot.send_audio(msg.chat.id, FSInputFile("/tmp/output.mp3"), title="اصغر آقا تبدیل کرد 😂")
-    os.remove("/tmp/input.tmp")
-    os.remove("/tmp/output.mp3")
+        await status.edit_text(f"یه مشکلی شد داداش:\n{str(e)[:400]}")
 
 async def main():
-    print("اصغر آقا آنلاین شد! 😂🚀")
+    print("اصغر آقا کاملاً آماده‌ست! 🔥")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
