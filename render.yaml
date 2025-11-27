@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: asghar-agha-bot
+    env: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      BOT_TOKEN:
+        description: Telegram Bot Token
+        value: 
