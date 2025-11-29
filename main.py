@@ -7,7 +7,7 @@ from aiogram.filters import Command
 from aiogram.types import FSInputFile
 from aiogram import F
 
-TOKEN = os.environ.get("BOT_TOKEN")
+TOKEN = os.environ.get("8438641821:AAG2ZmfxAcpBPpLF2us1pkNQ_vAiT8LqIHI")
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
